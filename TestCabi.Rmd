@@ -1,0 +1,438 @@
+---
+title: "Test Cabify"
+author: "Eduardo Nava Rosales"
+date: "1 de marzo de 2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Análisis estadísticos, gráficos y manipulación de bases de datos.
+Sección 1: Estadística descriptiva, manipulación de bases de datos, representaciones
+visuales y mapas
+
+
+```{r echo = FALSE, include = FALSE}
+library(maptools)
+library(sp)
+library(sf)
+library(plotly)
+library(dplyr)
+library(rgeos)
+library(rgdal)
+library(leaflet)
+library(chron)
+library(lubridate)
+```
+```{r echo=FALSE}
+ruta<-'C:\\Lozdariochu\\Documentos\\Lalo\\TestCabify\\Descriptiva'
+setwd(ruta)
+#Leemos la base
+DENUE<-read.csv('denue_inegi_61_.csv', header = T, encoding = 'UTF8')
+
+
+#*** PREGUNTA 1 a ****
+#Filtar las entidades que nos interesan
+data1 <- DENUE %>% filter(entidad %in% c('CIUDAD DE MÃ‰XICO', 'PUEBLA', 'JALISCO'))
+
+#Encontar las secundarias privadas y publicas
+#Manipulacion de textos
+sectora <- numeric(38)
+sectora[grep("privado", unique(DENUE$nombre_act))] <- 2
+sectora[c(6, 29)]<-2
+sectora[grep("pÃºblico", unique(DENUE$nombre_act))] <- 1
+#grep("secundaria", unique(DENUE$nombre_act))
+#*#*#*#*#
+SecPriv <- unique(DENUE$nombre_act)[c(25, 35)]
+SecPub <- unique(DENUE$nombre_act)[c(27, 28)]
+
+#Numero de secundarias privadas
+CDMXPriv <- nrow(data1 %>% filter(nombre_act %in% SecPriv) %>% filter(entidad == 'CIUDAD DE MÃ‰XICO'))
+PuePriv <- nrow(data1 %>% filter(nombre_act %in% SecPriv) %>% filter(entidad == 'PUEBLA'))
+JalPriv <- nrow(data1 %>% filter(nombre_act %in% SecPriv) %>% filter(entidad == 'JALISCO'))
+#Numero de secunarias privadas
+CDMXPub <- nrow(data1 %>% filter(nombre_act %in% SecPub) %>% filter(entidad == 'CIUDAD DE MÃ‰XICO'))
+PuePub <- nrow(data1 %>% filter(nombre_act %in% SecPub) %>% filter(entidad == 'PUEBLA'))
+JalPub <- nrow(data1 %>% filter(nombre_act %in% SecPub) %>% filter(entidad == 'JALISCO'))
+
+
+Entidad <- c("CDMX", "Puebla", "Jalisco")
+Privadas <- c(CDMXPriv, PuePriv, JalPriv)
+Publicas <- c(CDMXPub, PuePub, JalPub)
+ProporcionPub <-c(Publicas[1]/(Publicas[1]+Privadas[1]),      Publicas[2]/(Publicas[2]+Privadas[2]), Publicas[3]/(Publicas[3]+Privadas[3]))
+PropPriv<-1-ProporcionPub
+dataf <- data.frame(Entidad, Publicas, Privadas)
+
+
+```
+#Porcentaje de secundarias públicas y privadas.
+
+```{r echo=FALSE}
+plot_ly(dataf, x = ~Entidad, y = ~Publicas, type = 'bar', name = 'Públicas') %>%
+  add_trace(y = ~Privadas, name = 'Privadas') %>%
+  layout(yaxis = list(title = 'Número'), barmode = 'stack', title = 'Secundarias Públicas y Privadas')%>%
+  add_annotations(text = paste(round(100*PropPriv, 2), "%" ),
+                  x = c('CDMX', 'Puebla', 'Jalisco'),
+                  y = Publicas+(Privadas/2),
+                  xref = "x",
+                  yref = "y",
+                  font = list(family = 'Arial',
+                              size = 14, color='black'), showarrow = FALSE) %>%
+  add_annotations(text = paste(round(100*ProporcionPub, 2), "%" ),
+                  x = c('CDMX', 'Puebla', 'Jalisco'),
+                  y = c(CDMXPub, PuePub, JalPub)/2,
+                  xref = "x",
+                  yref = "y",
+                  font = list(family = 'Arial',
+                              size = 14, color='black'), showarrow = FALSE)
+```
+
+```{r include = FALSE}
+ruta<-'C:\\Lozdariochu\\Documentos\\Lalo\\TestCabify\\Descriptiva'
+setwd(ruta)
+# grep("superior", unique(DENUE$nombre_act))
+# unique(DENUE$nombre_act)[grep("superior", unique(DENUE$nombre_act))]
+
+#*** PREGUNTA 1 b ***#
+#Encontrar las escuelas de educacion superior
+Superior<-unique(DENUE$nombre_act)[c(10, 23)]
+#Contar el numero de escuelas de eduacion superiror por municipio
+data2<-DENUE%>%filter(nombre_act %in% Superior)%>%group_by(municipio, entidad)%>%summarise(Escuelas=n())%>%
+  arrange(desc(Escuelas))
+```
+
+#20 municipios con mayor número de escuelas de educación superior
+```{r echo = FALSE}
+DT::datatable(data2[1:20,], options = list(dom = 'Bfrtip', 
+                                                   buttons = 
+                                                     list(
+                                                       list(extend='copy', text = 'Copiar'), list(extend='csv'), list(extend='excel'), list(extend='pdf'), list(extend='print', text= 'Imprimir')),
+                                                   autoWidth = TRUE, 
+                                                   language = list(
+                                                     search = 'Buscar', 
+                                                     "sProcessing"=     "Procesando...",
+                                                     "sLengthMenu"=     "Mostrar _MENU_ registros",
+                                                     "sZeroRecords"=    "No se encontraron resultados",
+                                                     "sEmptyTable"=    "Ningún dato disponible en esta tabla",
+                                                     "sInfo"=     "Mostrando registros del _START_ al _END_ de un total de _TOTAL_ registros",
+                                                     "sInfoEmpty"=      "Mostrando registros del 0 al 0 de un total de 0 registros",
+                                                     "sInfoFiltered"=   "(filtrado de un total de _MAX_ registros)",
+                                                     "sLoadingRecords"= "Cargando...",
+                                                     
+                                                     "oPaginate"= list(
+                                                       "sFirst"=   "Primero",
+                                                       "sLast"=    "Último",
+                                                       "sNext"=     "Siguiente",
+                                                       "sPrevious"= "Anterior"
+                                                     ),
+                                                     
+                                                     "sFirst"=   "Primero",
+                                                     "sLast"=     "Último",
+                                                     "sNext"=     "Siguiente",
+                                                     "sPrevious"= "Anterior"),
+                                                   initComplete = JS(
+                                                     "function(settings, json) {",
+                                                     "$(this.api().table().header()).css({'background-color': '#6D498E', 'color': '#fff'});",
+                                                     "}")
+                                                   )
+)
+
+```
+
+#Las 30 actividades económicas que más producción bruta total generan para todo el
+país.#
+
+```{r echo = FALSE, include = FALSE}
+#*****#******#*****
+#*** PREGUNTA 2 ***##
+ruta<-'C:\\Lozdariochu\\Documentos\\Lalo\\TestCabify\\Descriptiva'
+setwd(ruta)
+inegi<-read.csv('ce_inegi_00.csv')
+names(inegi)[names(inegi)=='A111A']<-'ProducBrutTotal'
+
+
+tablaProducion<-inegi%>%select(actividad_economica, ProducBrutTotal)%>%
+                group_by(actividad_economica)%>%summarise(Total=sum(ProducBrutTotal))%>%
+  arrange(desc(Total))
+```
+```{r echo = FALSE}
+DT::datatable(tablaProducion[1:30,], options = list(dom = 'Bfrtip', 
+                                                   buttons = 
+                                                     list(
+                                                       list(extend='copy', text = 'Copiar'), list(extend='csv'), list(extend='excel'), list(extend='pdf'), list(extend='print', text= 'Imprimir')),
+                                                   autoWidth = TRUE, 
+                                                   language = list(
+                                                     search = 'Buscar', 
+                                                     "sProcessing"=     "Procesando...",
+                                                     "sLengthMenu"=     "Mostrar _MENU_ registros",
+                                                     "sZeroRecords"=    "No se encontraron resultados",
+                                                     "sEmptyTable"=    "Ningún dato disponible en esta tabla",
+                                                     "sInfo"=     "Mostrando registros del _START_ al _END_ de un total de _TOTAL_ registros",
+                                                     "sInfoEmpty"=      "Mostrando registros del 0 al 0 de un total de 0 registros",
+                                                     "sInfoFiltered"=   "(filtrado de un total de _MAX_ registros)",
+                                                     "sLoadingRecords"= "Cargando...",
+                                                     
+                                                     "oPaginate"= list(
+                                                       "sFirst"=   "Primero",
+                                                       "sLast"=    "Último",
+                                                       "sNext"=     "Siguiente",
+                                                       "sPrevious"= "Anterior"
+                                                     ),
+                                                     
+                                                     "sFirst"=   "Primero",
+                                                     "sLast"=     "Último",
+                                                     "sNext"=     "Siguiente",
+                                                     "sPrevious"= "Anterior"),
+                                                   initComplete = JS(
+                                                     "function(settings, json) {",
+                                                     "$(this.api().table().header()).css({'background-color': '#6D498E', 'color': '#fff'});",
+                                                     "}")
+                                                   )
+)
+
+plot_ly(tablaProducion[1:30,], y=~actividad_economica, x=~Total,
+  type = "bar")
+```
+
+```{r echo = FALSE, include = FALSE}
+#****###**#**###
+ruta<-'C:\\Lozdariochu\\Documentos\\Lalo\\TestCabify\\Descriptiva'
+setwd(ruta)
+
+Mineria<-read.csv('denue_inegi_21_.csv')
+shape <- readOGR(dsn = "Mapas", layer = "dest_2015gw")
+
+
+tablaMapa<-Mineria%>%group_by(entidad, cve_ent)%>%summarise(Establecimientos=n())
+
+shape@data <- shape@data %>% left_join(tablaMapa, by = c("COV_ID"="cve_ent"))
+
+shape_df <- broom::tidy(shape, region = "NOM_ENT")
+shape_df <- shape_df %>% left_join(shape@data, by = c("id"="NOM_ENT"))
+map <- ggplot() + geom_polygon(data = shape_df, aes(x = long, y = lat, group = group, fill = Establecimientos), colour = "black") + theme_void()
+```
+#Estados del país por número de establecimientos dedicados a la minería.
+```{r echo = FALSE}
+map 
+```
+```{r include = FALSE}
+ruta<-'C:\\Lozdariochu\\Documentos\\Lalo\\TestCabify\\Inferencial'
+setwd(ruta)
+
+PIB<-read.csv('PIB.csv', skip=4)
+
+serie<-t(PIB[PIB$Country.Name=='Mexico',][,c(-1*1:4, -ncol(PIB))])
+colnames(serie)<-NULL
+PIBMEX<- data.frame(PIB=serie[-59])
+PIBMEX<-ts(PIBMEX, start = 1960, end = 2017, frequency = 1)
+
+
+
+#model2<-garch(x, order = c(2, 2))
+
+#plot.ts(model2$residuals)
+
+
+x = log(PIBMEX)
+dif1.x = diff(x)
+plot.ts(dif1.x)
+
+
+y<-(sqrt(PIBMEX)-1)/.5
+plot.ts(y)
+dify<-diff(y)
+plot(dify)
+model1<-arima(x, c(0,1,2), include.mean = F)
+
+plot(model1$residuals)
+
+```
+##Sección 2: Estadística inferencial, series de tiempo y regresiones.##
+En todos los casos se uso "Previsión" de Excel para obtener los modelos y las proyecciones.
+
+El PIB para México en el año 2050 será de 2195780644588.04 UD$
+
+China superará a Estados Unidos como el país con mayor PIB para el año 2035
+Si combinamos los PIB de México, Canadá y Estados Unidos sí serián competencia.
+
+Al tener pocos datos y querer proyectar tan a largo plazo se mierde precisión.
+
+Los graficos se incluyen en una hoja de excel aparte.
+
+#De los datos de población se espera ue para 2059 la población mundial supere las 11 mil millones de personas.#
+El modelos es una regresión lineal simle.
+
+##Sección 3: Análisis general##
+
+```{r echo = FALSE}
+ruta <- 'C:\\Lozdariochu\\Documentos\\Lalo\\TestCabify\\Cabi'
+setwd(ruta)
+
+dataC<-read.csv('testmaxi.csv')
+```
+6. ¿Dónde deberíamos poner los coches?
+
+7. ¿En qué horas deberíamos poner los coches?
+
+```{r echo=TRUE}
+horas<-mdy_hm(as.character(dataC$start_at))
+horasfinde<-strftime(horas[is.weekend(horas)], format="%H")
+#hist(as.numeric(horasfinde), breaks=24)
+
+horasem<-strftime(horas[!is.weekend(horas)], format="%H")
+#hist(as.numeric(horasem), breaks=24)
+
+horaReq <- mdy_hm(as.character(dataC$start_at))
+horaArr <- mdy_hm(as.character(dataC$arrived_at))
+
+TiempEspera <- difftime(horaArr, horaReq, units = "mins")
+dataC$TiempoEspera <- as.numeric(TiempEspera)
+
+isweekend<-is.weekend(mdy_hm(as.character(dataC$start_at)))
+dataC$IsWeekend<-isweekend
+
+reg1 <- lm(TiempoEspera ~ driver_id + start_type + mdy_hm(as.character(dataC$start_at)) + IsWeekend, data = dataC)
+#summary(reg1)
+
+reg2 <- lm(TiempoEspera ~ driver_id  + start_type, data = dataC)
+#summary(reg2)
+
+reg4 <- lm(TiempoEspera ~ start_type  + IsWeekend, data = dataC)
+summary(reg4)
+
+reg5 <- lm(TiempoEspera ~ start_type + strftime(mdy_hm(as.character(dataC$start_at)), format = "%H:%m") + IsWeekend, data = dataC)
+#summary(reg5)
+```
+
+8. ¿Nos faltan o sobran coches? ¿Cuándo? ¿Cómo?
+
+Tiempo promedio de espera fines de semana
+```{r }
+mean(dataC$TiempoEspera[(dataC$IsWeekend == T & dataC$start_type=='asap')], na.rm = T)
+
+```
+Tiempo promedio de espera entre semana
+```{r }
+mean(dataC$TiempoEspera[(dataC$IsWeekend == F & dataC$start_type=='asap')], na.rm = T)
+#summary(dataC$TiempoEspera[dataC$start_type=='asap'])
+```
+Las siguientes graficas las utiice para ver si donde hay más tiempo de espera es una zona especifica.
+```{r }
+#LUGAR
+plot_ly(x=dataC$start_lat[dataC$start_type=='asap'], y=dataC$start_lon[dataC$start_type=='asap'])
+plot_ly(x=dataC$start_lat[(dataC$start_type=='asap' & dataC$TiempoEspera>18)], y=dataC$start_lon[(dataC$start_type=='asap' & dataC$TiempoEspera>18)])
+mean(dataC$TiempoEspera[(dataC$IsWeekend == F & dataC$start_type=='asap')], na.rm = T)
+```
+El siguiente gráfico es para chicar si existen horas donde haya más tiempo de espera.
+```{r }
+#HORA
+horas<-mdy_hm(as.character(dataC$start_at))
+horasREQ<-strftime(horas, format="%H")
+
+boxplot(dataC$TiempoEspera[dataC$start_type=='asap'])
+
+plot_ly(x=horasREQ[(dataC$start_type=='asap' & dataC$TiempoEspera<40)], y = dataC$TiempoEspera[(dataC$start_type=='asap' & dataC$TiempoEspera<40)], type = 'box')
+```
+##A partir de los datos se puede concluir que hagan falta automoviles en alguna hora especifica, ya que aunque el tiempo de espera si varía un poco esto puede deberse al tráfico.##
+Se puede decir que están bien distribuidos.
+
+9. ¿Los conductores están lo suficientemente ocupados si lo comparamos con una jornada laboral estándar
+en México (8 horas) ?
+
+#Tiempo promedio por día trabajado
+```{r  echo=FALSE}
+Fechas<-format(mdy_hm(as.character(dataC$start_at)), '%Y-%m-%d')
+dataC$Fecha<-Fechas
+Duracion<-abs(difftime(mdy_hm(as.character(dataC$end_at)), mdy_hm(as.character(dataC$start_at)),  units = "mins"))
+Duracion<-ifelse(Duracion==0, NA, Duracion)
+
+dataC$Duracion<-Duracion
+
+tiempoTrabajado<-dataC%>%filter(Fecha == Fechas[1], !is.null(driver_id), end_state=='drop off') %>%group_by(driver_id)%>%summarise(TiempoT=sum(Duracion, na.rm = T))
+colnames(tiempoTrabajado)[2]<-'fecha1'
+
+
+for(k in sort(unique(Fechas))){
+  tiempoTrabajado<-merge(tiempoTrabajado, dataC%>%filter(Fecha == k, end_state=='drop off') %>%group_by(driver_id)%>%summarise(TiempoT=sum(Duracion, na.rm = T)), by='driver_id', all=T)
+  colnames(tiempoTrabajado)[colnames(tiempoTrabajado)=='TiempoT']<-k
+}
+
+for(i in 2:ncol(tiempoTrabajado)){
+tiempoTrabajado[, i]<-ifelse(tiempoTrabajado[, i]<20, NA, tiempoTrabajado[, i])
+}
+
+mean(rowMeans(tiempoTrabajado[,2:ncol(tiempoTrabajado)], na.rm =T), na.rm=T)/60
+```
+La base presenta inconsiestencias en los campos: star_at y end_at por lo que el análisis no es correcto.
+
+10. ¿A qué conductores darías bonos? ¿A cuáles les darías las gracias?
+
+##Bonos:
+```{r echo=FALSE }
+tabladrivers<-dataC%>%filter(end_state=='drop off')%>%group_by(driver_id)%>%
+  summarise(Viajes=n())%>%arrange(Viajes)
+
+tabladrivers0<-dataC%>%filter(end_state=='driver cancel')%>%group_by(driver_id)%>%
+  summarise(Cancelados=n())%>%arrange(Cancelados)
+
+tabladrivers1<-dataC%>%group_by(driver_id)%>%
+  summarise(Prom=mean(driver_score, na.rm = T))%>%arrange(Prom)
+
+TabladriverCompleta<-merge(x = merge(x = tabladrivers, y = tabladrivers1, by = "driver_id", all = TRUE), y = tabladrivers0, by = "driver_id", all = TRUE)
+
+#summary(TabladriverCompleta$Viajes)
+#summary(TabladriverCompleta$Prom)
+#summary(TabladriverCompleta$Cancelados)
+
+BONOS<-TabladriverCompleta%>%filter(Viajes >= 76 & Prom > 4.4 & Cancelados<2)
+Bono1<-TabladriverCompleta%>%filter(Viajes >= 76 & (Prom >= 4.4 | Cancelados<=7) & Prom > 3.503)
+Bono2<-TabladriverCompleta%>%filter(Prom >= 4.4  & (Viajes >= 76 | Cancelados<=7))
+Bono3<-TabladriverCompleta%>%filter(Cancelados <= 2  & (Prom >= 4.4 | Viajes >= 76) & Prom > 3.503 )
+BONOS
+print('otros bonos')
+unique(c(as.character(Bono1$driver_id), as.character(Bono2$driver_id), as.character(Bono3$driver_id)))
+```
+Los siguientes conductores tienen muy bajo rendimiento
+```{r echo=FALSE}
+Who<-TabladriverCompleta%>%filter(Viajes <= 7 & Prom<= 3.16 & Cancelados>=7)
+
+Who1<-TabladriverCompleta%>%filter(Viajes < 7 & (Prom<= 3.16 | Cancelados>=7) )
+
+Who2<-TabladriverCompleta%>%filter(Prom < 3.16  & (Viajes <= 7 | Cancelados>=7) )
+
+Who3<-TabladriverCompleta%>%filter(Cancelados > 7  & (Prom<= 3.16 | Viajes <= 7) )
+
+unique(c(as.character(Who1$driver_id), as.character(Who2$driver_id)))
+```
+11. ¿Hay pasajeros leales? ¿ Hay pasajeros que debemos quitar?  
+
+#Lista de pasajeros leales
+```{r echo = FALSE}
+tablausers<-dataC%>%filter(end_state=='drop off')%>%group_by(user_id)%>%
+  summarise(Viajes=n())%>%arrange(Viajes)
+
+tablausers0<-dataC%>%filter(end_state=='rider cancel')%>%group_by(user_id)%>%
+  summarise(Cancelados=n())%>%arrange(Cancelados)
+
+tablausers1<-dataC%>%group_by(user_id)%>%
+  summarise(Prom=mean(rider_score, na.rm = T))%>%arrange(Prom)
+
+TablauserCompleta<-merge(x = merge(x = tablausers, y = tablausers1, by = "user_id", all = TRUE), y = tablausers0, by = "user_id", all = TRUE)
+
+#summary(TablauserCompleta$Viajes)
+#summary(TablauserCompleta$Prom)
+#summary(TablauserCompleta$Cancelados)
+
+unique(TablauserCompleta$user_id[(TablauserCompleta$Viajes>61 & TablauserCompleta$Prom>= 4.731)])
+
+```
+
+Existen pasajeros que tienen mala calificación y cancelan muchos viajes, pero tambén realizan muchos.
+```{r echo = FALSE}
+chicosMAlos<-TablauserCompleta %>%filter(Prom<= 4.35 & Cancelados>=7)
+chicosMAlos
+```
+
+#¡Muchas Gracias!
